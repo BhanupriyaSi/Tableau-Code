@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+
+import json
+from influxdb import InfluxDBClient
+import requests
+import time
+
+CORE_URL = "http://192.168.9.68:8181"
+
+butler_api = CORE_URL + "/api/v2/butlerinfo"
+charger_api = CORE_URL + "/api/v2/chargerinfo"
+
+influx_host = '192.168.9.68'
+influx_port = 8086
+
+butler_info_req = requests.get(butler_api)
+charger_info_req = requests.get(charger_api)
+
+if butler_info_req:
+    butler_data = butler_info_req.json()
+    json_butler_data = []
+    for butler in butler_data['butlerinfo_list']:
+        indo = {
+            "measurement": "butler_uptime",
+            "tags": {
+                "bot_id": butler['id'],
+            },
+            "time": time.strftime("%Y-%m-%dT%X"),
+            "fields": {
+                "tasktype": butler['tasktype'],
+                "power_state":butler['state'],
+                "bot_id_int":butler['id'],
+                "manual_paused":butler['pause_status']['manual'],
+                "low_charged_paused":butler['pause_status']['low_charge'],
+                "nav_status_state":butler['navstatus'],
+                "bot_state":butler['status'],
+            }
+        }
+        json_butler_data.append(indo)
+
+    butler_client = InfluxDBClient(host=influx_host, port=influx_port)
+    # butler_client.create_database('butler_test')
+    butler_client.switch_database('GreyOrange')
+    print("Butler Data Inserted: ",butler_client.write_points(json_butler_data))
+else:
+    print("No butler data found")
+
+if charger_info_req:
+    charger_data = charger_info_req.json()
+    json_charger_data = []
+    for charger in charger_data['chargerinfo_list']:
+        indo = {
+            "measurement": "charger_uptime",
+            "tags": {
+                "charger_id": charger['charger_id'],
+            },
+            "time": time.strftime("%Y-%m-%dT%X"),
+            "fields": {
+                "connectivity": charger['status'],
+                "state":charger['mode'],
+                "error_condition":charger['error_reason'],
+            }
+        }
+        json_charger_data.append(indo)
+
+    charger_client = InfluxDBClient(host=influx_host, port=influx_port)
+    # charger_client.create_database('charger_test')
+    charger_client.switch_database('GreyOrange')
+    print("Charger Data Inserted: ",charger_client.write_points(json_charger_data))
+else:
+    print("No charger data: found")
